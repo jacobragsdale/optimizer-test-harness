@@ -1,0 +1,25 @@
+# Local dry-run configuration: sqlite plus the stub optimizer. For QA, copy to harness.qa.toml and edit (docs/setup.md).
+[db]
+dialect = "sqlite"  # sqlite | oracle | mssql
+qa_markers = []     # QA: ["qa"]. The DSN must contain one of these or the CLI refuses to connect. Empty disables.
+
+# Tables a test may change. `key` is the only way a row may be identified; `columns` are the only columns that may be set.
+[[allow]]
+table = "PORTFOLIO_CONSTRAINT"
+key = ["PORTFOLIO_ID", "CONSTRAINT_TYPE"]
+columns = ["LIMIT_VALUE", "ENABLED"]
+
+[api]
+submit_url = "http://127.0.0.1:8765/runs"
+status_url = "http://127.0.0.1:8765/runs/{run_id}"
+run_url = "http://127.0.0.1:8765/ui/runs/{run_id}"  # the UI page BAs open for a run
+run_id_field = "run_id"                              # in the submit response
+status_field = "status"                              # in the status response
+output_path_field = "output_path"                    # in the status response: where the parquet landed (NFS path)
+terminal_statuses = ["done", "failed", "cancelled"]
+success_statuses = ["done"]
+poll_seconds = 2.0
+timeout_seconds = 3600.0
+
+[paths]
+runs = "runs"  # manifests: runs/<case_id>/<timestamp>.json, plus the PENDING_REVERT marker

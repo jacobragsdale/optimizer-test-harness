@@ -1,0 +1,30 @@
+# A complete spec against the local sample database (docs/setup.md). Run: uv run --env-file .env harness run-case specs/EXAMPLE-001.yaml
+case_id: EXAMPLE-001
+title: Tightened sector cap binds on a mid cap portfolio
+source:
+  sheet: New Feature
+  row: 4
+description: |
+  Take a mid cap portfolio that has a sector constraint. Lower the sector max to 10% and rerun.
+  No sector in the optimized holdings should be above 10%.
+interpretation: |
+  Set SECTOR_MAX LIMIT_VALUE on PF-1002 from 0.20 to 0.10, run the optimizer for PF-1002, and check that the
+  summed weight per sector in holdings.parquet never exceeds 0.10.
+portfolio:
+  criteria: market cap bucket MID, has an enabled SECTOR_MAX constraint
+  ids: [PF-1002]
+  rationale: the only MID portfolio in the sample data with SECTOR_MAX enabled
+changes:
+  - table: PORTFOLIO_CONSTRAINT
+    key: {PORTFOLIO_ID: PF-1002, CONSTRAINT_TYPE: SECTOR_MAX}
+    column: LIMIT_VALUE
+    value: 0.10
+run:
+  params:
+    portfolio_id: PF-1002
+expected:
+  outcome: success
+  text: No sector in the optimized holdings should be above 10%.
+  evaluation_plan:
+    - "holdings: SELECT sector, sum(weight) AS w FROM holdings GROUP BY sector ORDER BY w DESC; every w <= 0.10"
+    - "summary: one row; holdings count equals the number of rows in holdings"

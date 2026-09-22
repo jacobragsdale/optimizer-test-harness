@@ -8,39 +8,59 @@ description: "Compile BA test cases from an Excel workbook into YAML specs. Use 
 Turn each BA-written test case in an Excel workbook into one reviewable YAML spec under `specs/`. This skill never
 changes QA data or calls the app; its only database access is read-only SQL for discovery.
 
+## Asking
+
+Ask when the answer changes a setup step, the subject, the evaluation plan or which cases compile, or when two
+readings are both plausible. Otherwise take the default the glossary, the docs or an earlier answer gives, and say
+which one you took.
+
+- Collect the open questions first, then ask up to four per round. Give a choice two to four concrete options,
+  your recommendation first with its reason; ask for a plain fact (a URL, a path) plainly.
+- Wait for the answers; never go on with an answer you assumed. Ask more rounds until nothing blocking remains.
+- Record glossary answers in `docs/glossary.md` and case answers in the spec's `interpretation`, so no later session
+  asks them again.
+
 ## Workflow
 
 Every command is `uv run --env-file .env harness ...` from the repo root. Run it, read the output, decide.
 
 1. Read `docs/glossary.md`, `docs/schema.md`, `docs/api.md`, `docs/outputs.md`, and the `[[allow]]` and
-   `[[operation]]` entries in `harness.toml`. When a BA phrase is missing from the glossary, add your reading to the
-   glossary table and flag it in the spec's `interpretation`.
+   `[[operation]]` entries in `harness.toml`.
 2. Run `harness dump-workbook <workbook.xlsx>`. Every non-empty row prints with its sheet and row number; that pair is
-   the spec's `source`.
-3. For each test case row, write `specs/<case_id>.yaml` from the template below. Copy `description` and
-   `expected.text` verbatim. Write `interpretation` as one or two sentences a BA can confirm or correct without
-   reading anything else.
-4. Find the subject (the account, product, order... the case is about) with `harness sql "<SELECT ...>"`. Query
-   freely; discovery is read-only. Prefer a subject whose current data already satisfies most of the setup, so the
-   setup stays short. Record the ids and a one-line `rationale`.
-5. Write `setup` only for what the test needs:
+   the spec's `source`. List the test case rows you found and any `specs/<case_id>.yaml` that already exists (it may
+   carry BA corrections). Ask which cases to compile unless the request names them, and whether to overwrite
+   existing specs; step 3 depends on both answers.
+3. For each case, work out a reading and find the subject (the account, product, order... the case is about) with
+   `harness sql "<SELECT ...>"`. Query freely; discovery is read-only. Prefer a subject whose current data already
+   satisfies most of the setup, so the setup stays short. Write no spec yet.
+4. Clarify, in rounds covering all cases, before writing any spec:
+   - Rows with two plausible readings: each reading and what it changes in the setup or the evaluation.
+   - BA phrases missing from the glossary: the entry you propose.
+   - Expectations with no checkable value ("prices update correctly"): the value, or the tolerance to compare with.
+   - Subjects whose candidates could give different outcomes (for example, one also has a second active discount).
+   - Cases that need a table, column, op or call outside `harness.toml`: skip the case and mark it blocked, propose
+     the change through the harness-setup skill, or use another reading that fits.
+   When the user says to use your judgment, pick, and put both readings and your pick in `interpretation`.
+5. Write `specs/<case_id>.yaml` from the template below. Copy `description` and `expected.text` verbatim. Write
+   `interpretation` as one or two sentences a BA can confirm or correct without reading anything else, plus any
+   step 4 answer that shaped it. Record the subject's ids and a one-line `rationale`.
+6. Write `setup` only for what the test needs:
    - `db: update`: one row by its full key; `set` only the columns that must change.
    - `db: insert`: a key that is plainly test data (`R-TEST-<case>`), checked unused with `harness sql`.
    - `db: delete`: only when the test needs the row gone. The whole row is saved and put back afterwards.
    - `api: <operation>`: only operations with an `undo` in `harness.toml`.
-   Only allowlisted tables, ops and columns, and defined operations. When a test needs anything else, stop and tell
-   the user which table, column or call it needs. Do not work around it, for example with an API call that changes
-   what the allowlist forbids.
-6. Write `run` as the operations that exercise the app, in order. Pass ids captured by earlier steps as `"{name}"`.
+   Only allowlisted tables, ops and columns, and defined operations. Never work around a missing permission, for
+   example with an API call that changes what the allowlist forbids; step 4 settles those cases.
+7. Write `run` as the operations that exercise the app, in order. Pass ids captured by earlier steps as `"{name}"`.
    Write `collect` for database evidence: rows the app writes, or setup values you need to prove were in effect.
    A collect query runs after the run and before the revert; put `{name}` in it unquoted, it is bound as a parameter.
-7. Write `expected.evaluation_plan` before anything runs: which view, which columns or aggregate, and what value
+8. Write `expected.evaluation_plan` before anything runs: which view, which columns or aggregate, and what value
    shows the expectation held. Round float sums (`round(sum(x), 6)`) so noise is never read as a breach. When the
    BA expects the app to reject the case, set `outcome: failure` and name the rejection: the final status, HTTP
    status or error text.
-8. Run `harness validate specs/*.yaml` and fix every problem it prints.
-9. Present the specs for review before any of them run: per case, the interpretation, subject, setup, run and
-   evaluation plan. The user or a BA corrects them here, which is far cheaper than after a run.
+9. Run `harness validate specs/*.yaml` and fix every problem it prints.
+10. Present the specs for review before any of them run: per case, the interpretation, subject, setup, run and
+    evaluation plan. The user or a BA corrects them here, which is far cheaper than after a run.
 
 ## Spec template
 
@@ -78,8 +98,8 @@ expected:
 
 - `case_id` comes from the workbook's ID column. When there is none, use `<sheet>-r<row>` and tell the user to have
   BAs add an ID column; row numbers move.
-- A row whose reading changes the setup or the evaluation gets both readings in `interpretation` plus the one you
-  chose. Never pick silently.
+- A case pasted into the chat has no `source`. Ask for its workbook, sheet and row; `source` is required and ties the
+  spec back to the BA's row.
 - Values are typed by YAML: `0.10` is a number, `"0.10"` is text. Match the column. A body string that is exactly
   `"{name}"` keeps the captured value's type.
 - Views for the evaluation plan: each response is named by its operation (`get_prices`; a second call

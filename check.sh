@@ -5,7 +5,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
-uvx copier copy --defaults --quiet "$here" "$out"
+uvx copier copy --defaults --quiet --vcs-ref HEAD "$here" "$out"  # default is the latest tag
 cd "$out"
 git init -q && git add -A
 uv sync --quiet

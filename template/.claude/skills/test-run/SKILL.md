@@ -5,9 +5,19 @@ description: "Run a compiled test spec: plan, set up, run, evaluate, revert, rep
 
 # Test run
 
-Run one compiled spec through the harness CLI and judge the result. The CLI owns every side effect: it logs in,
-applies the setup, calls the app, snapshots the `collect` queries, and reverts inside a `finally` block. This skill
-covers the plan review, the evaluation, the verdict, and the report.
+Run compiled specs through the harness CLI, one case at a time, and judge each result. The CLI owns every side
+effect: it logs in, applies the setup, calls the app, snapshots the `collect` queries, and reverts inside a `finally`
+block. This skill covers the plan review, the evaluation, the verdict, and the report.
+
+## Asking
+
+Ask when the answer changes which cases run, whether a case reruns, or how a set continues after a harness error.
+Otherwise take the default the specs, `harness status` or an earlier answer gives, and say which one you took. Never
+ask the user to settle a verdict; the evidence decides it (see Judging).
+
+- Collect the open questions first, then ask up to four per round. Give a choice two to four concrete options,
+  your recommendation first with its reason; ask for a plain fact (a URL, a path) plainly.
+- Wait for the answers; never go on with an answer you assumed.
 
 ## Workflow
 
@@ -17,21 +27,30 @@ Every command is `uv run --env-file .env harness ...` from the repo root. Run it
    run `harness revert <run>` with no flag, show the user what it will undo, and run it with `--yes` only after
    they say go. When it reports an interrupted API call, tell the user exactly which call to check in the app; they
    clean it up and delete `runs/PENDING_REVERT` themselves.
-2. `harness validate specs/<case>.yaml`.
-3. `harness run-case specs/<case>.yaml` with no flag. It prints the plan with the current database values and the
-   full URLs, and changes nothing. Show the plan to the user and wait for them to say go.
-4. `harness run-case specs/<case>.yaml --yes`, only after the user approved that plan. Never pass `--yes` on your
-   own initiative and never use it to skip step 3. The command prints the run folder, the outcome, `run_ok` and the
-   link. A nonzero exit means an error is recorded in `<run>/manifest.json`; read it before doing anything else.
-5. `harness results <run>` for a summary of every view, then `harness results <run> --sql "<duckdb SQL>"` once per
+2. Settle what runs. For a set ("the regression set", "all pricing cases"), choose the specs, in order, and show
+   the list with the plans in step 4. Ask first when nothing in the repo defines the set or the request has more
+   than one plausible reading (a sheet or a feature, the tagged cases or all). Flag each case that `harness status`
+   already shows with a verdict.
+3. `harness validate` on every spec in the list.
+4. `harness run-case specs/<case>.yaml` with no flag, for every spec in the list. It prints the plan with the current
+   database values and the full URLs, and changes nothing. Show all the plans together and wait for the user to say
+   go; one go covers the list and the plans as shown. A spec that changes after the go needs its plan shown again.
+5. `harness run-case specs/<case>.yaml --yes`, one case at a time in list order, only for plans the user approved.
+   Never pass `--yes` on your own initiative and never use it to skip step 4. The command prints the run folder,
+   the outcome, `run_ok` and the link. A nonzero exit means an error is recorded in `<run>/manifest.json`; read it,
+   stop the set, and ask whether to retry the case, skip it, or stop. Output without `reverted: True` stops the set
+   for good: go back to step 1.
+6. `harness results <run>` for a summary of every view, then `harness results <run> --sql "<duckdb SQL>"` once per
    step of `expected.evaluation_plan`. Views: each response by its operation name, each collect by its name, each
    app output file by its stem. Query exactly what the plan said you would look at, then anything else you need to
    explain a surprise.
-6. Record the verdict:
+7. Record the verdict:
    `harness verdict <run> pass|fail|inconclusive --evidence "<observed value>" --evidence "..." --notes "<one sentence>"`.
-   Evidence is quoted numbers or rows from step 5, one observation per flag.
-7. After the last case: `harness report --out <results.xlsx> --workbook <ba-workbook.xlsx>`. Give the user the
-   path and two lines per case: the verdict, and the one piece of evidence that decided it.
+   Evidence is quoted numbers or rows from step 6, one observation per flag.
+8. After the last case: `harness report --out <results.xlsx> --workbook <ba-workbook.xlsx>`. Use the workbook the
+   specs were compiled from; ask for it when it is not in the repo. Pass `--out results.xlsx` (repo root) unless the
+   user named another path; ask before overwriting an existing file. Give the user the path and two lines per
+   case: the verdict, and the one piece of evidence that decided it.
 
 ## Judging
 

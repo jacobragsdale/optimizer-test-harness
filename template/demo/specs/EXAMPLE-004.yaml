@@ -1,0 +1,27 @@
+# API setup with an undo, and a file the app writes (prices_export.csv under [outputs]).
+case_id: EXAMPLE-004
+title: A price list markup raises the desk price
+source: {sheet: Pricing, row: 5}
+description: |
+  Price the standing desk under a new price list with a 10% markup.
+  The desk should come out at 660.00.
+interpretation: |
+  Create a price list with markup_percent 10 through the API, run a pricing job for P-300 under it, and check that
+  both get_prices and the exported prices_export.csv show final_price 660.00 (600.00 plus 10%; R-3 is disabled).
+subject:
+  criteria: a product with no enabled discount, so the markup alone moves the price
+  ids: [P-300]
+  rationale: P-300's only rule, R-3, is disabled
+setup:
+  - {api: create_price_list, body: {name: harness EXAMPLE-004, markup_percent: 10}}
+run:
+  - {api: submit_job, body: {product_ids: [P-300], price_list_id: "{price_list_id}"}}
+  - {api: wait_job}
+  - {api: get_prices}
+collect: []
+expected:
+  outcome: success
+  text: The desk should come out at 660.00.
+  evaluation_plan:
+    - "get_prices: SELECT p.product_id, p.final_price FROM (SELECT unnest(prices) AS p FROM get_prices); P-300 final_price = 660.0"
+    - "prices_export: SELECT product_id, markup_percent, final_price FROM prices_export; one row, markup 10.0, final_price 660.0"

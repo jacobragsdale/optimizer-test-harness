@@ -1,0 +1,16 @@
+# Copier template for an LLM-driven web app test harness. Stamp: uvx copier copy <this repo> <dir>
+_subdirectory: template
+_answers_file: .copier-answers.yml
+
+# App-owned files: written once at stamp time, never touched by `copier update`.
+_skip_if_exists:
+  - docs/glossary.md
+  - docs/schema.md
+  - docs/api.md
+  - docs/outputs.md
+  - specs/.gitkeep
+
+app_name:
+  type: str
+  help: The app under test, as BAs name it (used in README.md and CLAUDE.md)
+  default: App

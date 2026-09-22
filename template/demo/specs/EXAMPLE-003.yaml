@@ -1,0 +1,25 @@
+# DB delete.
+case_id: EXAMPLE-003
+title: Without its discount the lamp sells at full price
+source: {sheet: Pricing, row: 4}
+description: |
+  Remove the desk lamp's discount; the lamp should sell at full price.
+interpretation: |
+  Delete DISCOUNT_RULE R-1 (the lamp's only rule), run a pricing job for P-100, and check that get_prices shows
+  discount_percent 0 and final_price 40.00, the base price.
+subject:
+  criteria: the desk lamp, which has exactly one discount rule
+  ids: [P-100]
+  rationale: R-1 is the only rule on P-100
+setup:
+  - {db: delete, table: DISCOUNT_RULE, key: {RULE_ID: R-1}}
+run:
+  - {api: submit_job, body: {product_ids: [P-100]}}
+  - {api: wait_job}
+  - {api: get_prices}
+collect: []
+expected:
+  outcome: success
+  text: The lamp sells at its base price, 40.00.
+  evaluation_plan:
+    - "get_prices: SELECT p.product_id, p.discount_percent, p.final_price FROM (SELECT unnest(prices) AS p FROM get_prices); P-100 discount_percent = 0 and final_price = 40.0"

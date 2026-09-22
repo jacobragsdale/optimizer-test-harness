@@ -1,0 +1,66 @@
+# The demo app's configuration (harness/stub.py over a local sqlite database). docs/setup.md runs it end to end.
+# A real app gets its own harness.toml at the repo root, written by the harness-setup skill; this file is the worked example.
+
+[db]
+dialect = "sqlite"  # sqlite | oracle | mssql
+qa_markers = []     # QA: e.g. ["qa"]. The DB DSN and api.base_url must each contain one of these or the CLI refuses. Empty disables.
+
+# Tables a test may write. `key` is the only way a row may be identified; `columns` are the only columns that may be set
+# (update) or filled (insert, besides the key); `ops` are the writes allowed on the table.
+[[allow]]
+table = "DISCOUNT_RULE"
+key = ["RULE_ID"]
+columns = ["PRODUCT_ID", "PERCENT", "ENABLED", "CREATED_ON"]
+ops = ["update", "insert", "delete"]
+
+[api]
+base_url = "http://127.0.0.1:8765"
+login = "login"  # called at the start of every case; the session cookie it sets is kept for the case
+timeout_seconds = 60.0
+# headers = { Authorization = "Bearer ${HARNESS_API_TOKEN}" }  # for token auth instead of a login call
+
+# Every API call a spec may make. Specs refer to these by name; they never carry a method or a path.
+[[operation]]
+name = "login"
+method = "POST"
+path = "/session"
+body = { user = "harness", password = "${HARNESS_APP_PASSWORD}" }  # ${ENV} is expanded on the wire only, never saved
+
+[[operation]]
+name = "create_price_list"
+method = "POST"
+path = "/price-lists"
+capture = { price_list_id = "id" }
+undo = "delete_price_list"  # required before an operation may be used as setup
+
+[[operation]]
+name = "delete_price_list"
+method = "DELETE"
+path = "/price-lists/{price_list_id}"
+
+[[operation]]
+name = "submit_job"
+method = "POST"
+path = "/jobs"
+capture = { job_id = "job_id" }
+
+[[operation]]
+name = "wait_job"
+method = "GET"
+path = "/jobs/{job_id}"
+poll = { field = "status", until = ["done", "failed", "cancelled"], success = ["done"], every_seconds = 2.0, timeout_seconds = 3600.0 }
+capture = { output_path = "output_path" }
+
+[[operation]]
+name = "get_prices"
+method = "GET"
+path = "/jobs/{job_id}/prices"
+
+[outputs]
+paths = ["{output_path}"]  # files the app writes; `harness results` adds them to the run's views
+
+[report]
+link = "{base_url}/ui/jobs/{job_id}"  # the page BAs open for a run
+
+[paths]
+runs = "runs"  # runs/<case_id>/<timestamp>/: manifest.json, saved responses, collect snapshots; plus the PENDING_REVERT marker

@@ -1,0 +1,15 @@
+# {{ app_name }} test harness
+
+Claude drives BA-written test cases against {{ app_name }}: compile the workbook into specs, run each spec through the
+CLI, judge the evidence, report to Excel. Three skills carry the procedure; the CLI carries every side effect.
+
+- Run everything as `uv run --env-file .env harness <command>`; `harness --help` lists the commands.
+- Never run SQL that changes data and never call the app's API outside the CLI.
+- `--yes` executes `run-case` and `revert`. Do not pass it until the user has seen the plan and said go.
+- A `PENDING_REVERT` banner means changes are sitting in QA. Fix that first, always.
+- No `harness.toml` yet means the harness has not been set up for the app: use the harness-setup skill.
+- Skills: `.claude/skills/harness-setup` (point the harness at the app), `.claude/skills/test-compile` (workbook to
+  specs), `.claude/skills/test-run` (spec to verdict and report).
+- Edit only app-owned files: `harness.toml`, `.env`, `specs/`, `docs/glossary.md`, `docs/schema.md`, `docs/api.md`,
+  `docs/outputs.md`. Everything else comes from the template and `copier update` overwrites it.
+- Local demo and QA setup: `docs/setup.md`. Checks: `uv run pytest`, `uv run pre-commit run --all-files`.

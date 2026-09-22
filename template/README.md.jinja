@@ -1,0 +1,51 @@
+# {{ app_name }} test harness
+
+An LLM-driven harness for testing {{ app_name }} against BA-written test cases. Claude reads the English, picks test data,
+and judges results. A small CLI does everything with side effects: allowlisted single-row inserts, updates and
+deletes in the QA database, API calls from a fixed list of named operations, polling, snapshots of the evidence,
+reverting all of it, and an Excel report BAs can open.
+
+```text
+workbook.xlsx ──test-compile──▶ specs/*.yaml ──test-run + CLI──▶ runs/<case>/<ts>/ ──report──▶ results.xlsx
+               (Claude reads,    (reviewed by                  (manifest, responses,          (Results, Runs,
+                queries, writes)  you and BAs)                  collect snapshots, verdict)    Changes sheets)
+```
+
+## Quick start
+
+```bash
+uv sync
+cp .env.example .env
+uv run python -m harness.stub --init-db demo.sqlite                  # terminal 1: the demo app
+uv run --env-file .env harness --config demo/harness.toml run-case demo/specs/EXAMPLE-001.yaml --yes
+uv run --env-file .env harness --config demo/harness.toml report --out results.xlsx --workbook demo/ba-test-cases.xlsx
+```
+
+For {{ app_name }}, open Claude Code here and ask it to set the harness up (the `harness-setup` skill).
+`docs/setup.md` has the demo walkthrough, the manual setup steps, and what the CLI enforces.
+
+## Layout
+
+| Path | What | Owner |
+|---|---|---|
+| `harness/cli.py` | commands: `status`, `dump-workbook`, `validate`, `sql`, `run-case`, `revert`, `results`, `verdict`, `report` | template |
+| `harness/run.py` | the case lifecycle and the manifest; revert lives in a `finally` | template |
+| `harness/db.py` | sqlite, Oracle and MSSQL adapter, allowlisted writes, before-image ledger, revert, read-only query | template |
+| `harness/api.py` | named operations: render, call, capture, poll | template |
+| `harness/spec.py`, `harness/config.py` | spec and `harness.toml` models and checks | template |
+| `harness/results.py`, `harness/report.py` | duckdb over the evidence; workbook dump and Excel report | template |
+| `harness/stub.py`, `demo/` | a demo pricing app with its config, specs and BA workbook | template |
+| `.claude/skills/` | `harness-setup`, `test-compile`, `test-run` | template |
+| `harness.toml`, `.env` | this app's QA targets, allowlist, operations, secrets | app |
+| `specs/` | this app's compiled test cases, one YAML per case | app |
+| `docs/glossary.md`, `schema.md`, `api.md`, `outputs.md` | this app's vocabulary, tables, API and evidence | app |
+
+Template-owned files come from the template and are replaced by `uvx copier update`; change them in the template.
+
+## Safety properties, enforced in the CLI
+
+- Refuses a DSN or base URL that does not look like QA (`qa_markers`).
+- DB writes touch only allowlisted tables, ops and columns, one row each, by full key. API calls are named operations only; setup operations must have an undo.
+- Every undo record is on disk before the change it undoes. The revert always runs, in reverse order.
+- A failed revert or a killed run leaves `runs/PENDING_REVERT`. Every command then prints a banner and `run-case` refuses to start. The marker is also the run lock: one case at a time.
+- Mutating commands show their plan and do nothing without `--yes`.

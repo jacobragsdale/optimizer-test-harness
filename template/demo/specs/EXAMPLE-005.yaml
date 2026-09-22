@@ -1,0 +1,26 @@
+# Expected failure: the app must reject the job.
+case_id: EXAMPLE-005
+title: A discount over 100% is rejected
+source: {sheet: Pricing, row: 6}
+description: |
+  Set the chair's discount to 150%. The pricing job should be rejected as invalid rather than produce a price.
+interpretation: |
+  Set DISCOUNT_RULE R-2 PERCENT to 150, run a pricing job for P-200, and check that wait_job ends in status failed
+  with an error naming an invalid discount, and that no prices are produced.
+subject:
+  criteria: the office chair, which has exactly one enabled discount rule
+  ids: [P-200]
+  rationale: R-2 alone then totals 150%
+setup:
+  - {db: update, table: DISCOUNT_RULE, key: {RULE_ID: R-2}, set: {PERCENT: 150}}
+run:
+  - {api: submit_job, body: {product_ids: [P-200]}}
+  - {api: wait_job}
+  - {api: get_prices}
+collect: []
+expected:
+  outcome: failure
+  text: The pricing job should be rejected as invalid rather than produce a price.
+  evaluation_plan:
+    - "manifest: the wait_job step ended with final_status failed; get_prices never ran"
+    - "wait_job: SELECT status, error FROM wait_job; status = failed and error mentions invalid discount"

@@ -1,0 +1,26 @@
+# DB insert.
+case_id: EXAMPLE-002
+title: A new discount on the monitor arm
+source: {sheet: Pricing, row: 3}
+description: |
+  Add a 20% discount to the monitor arm, which has none today.
+  The monitor arm should come out at 72.00.
+interpretation: |
+  Insert DISCOUNT_RULE R-TEST-002 for P-400 at 20%, enabled, run a pricing job for P-400, and check that get_prices
+  shows final_price 72.00 (90.00 less 20%).
+subject:
+  criteria: a product with no discount rules
+  ids: [P-400]
+  rationale: P-400 has no rules, so the new one is the whole discount
+setup:
+  - {db: insert, table: DISCOUNT_RULE, values: {RULE_ID: R-TEST-002, PRODUCT_ID: P-400, PERCENT: 20, ENABLED: 1, CREATED_ON: "2026-09-01"}}
+run:
+  - {api: submit_job, body: {product_ids: [P-400]}}
+  - {api: wait_job}
+  - {api: get_prices}
+collect: []
+expected:
+  outcome: success
+  text: The monitor arm should come out at 72.00.
+  evaluation_plan:
+    - "get_prices: SELECT p.product_id, p.final_price FROM (SELECT unnest(prices) AS p FROM get_prices); P-400 final_price = 72.0"

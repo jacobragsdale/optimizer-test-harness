@@ -1,54 +1,39 @@
-# Optimizer test harness
+# Web app test harness template
 
-An LLM-driven harness for testing a portfolio optimizer against BA-written test cases. Claude interprets the English,
-picks portfolios, and judges results. A small CLI does everything with side effects: allowlisted single-row data
-changes in the QA database with a before-image ledger, submitting and polling the optimizer's REST API, reading the
-parquet output, reverting, and rendering an Excel report BAs can open.
+A [Copier](https://copier.readthedocs.io) template for an LLM-driven test harness: Claude compiles BA-written test
+cases from an Excel workbook into specs, runs them against a web app's QA environment through a CLI that sets up
+data, calls the app's API, and reverts everything afterwards, then reports back to BAs in Excel.
 
-```text
-workbook.xlsx ──compile skill──▶ specs/*.yaml ──run skill + CLI──▶ runs/<case>/<ts>.json ──report──▶ results.xlsx
-                (Claude reads,        (reviewed by                 (manifest: changes, run id,        (Results, Runs,
-                 queries, writes)      you and BAs)                 url, status, verdict)              Changes sheets)
-```
-
-## Quick start
+## Stamp a harness for an app
 
 ```bash
-uv sync
-cp .env.example .env
-uv run python -m harness.stub --init-db local.sqlite      # terminal 1: fake optimizer + sample database
-uv run --env-file .env harness run-case specs/EXAMPLE-001.yaml --yes
-uv run --env-file .env harness report --out results.xlsx --workbook examples/ba-test-cases.xlsx
+uvx copier copy <this repo's git URL or path> <app>-test-harness
+cd <app>-test-harness && git init && git add -A && git commit -m "Stamp test harness"
 ```
 
-`docs/setup.md` has the full local walkthrough and the QA configuration steps.
+Then open Claude Code in the new repo and ask it to set the harness up for the app: the `harness-setup` skill asks
+for the QA URL, auth, API docs and DSNs, maps the schema read-only, and writes `harness.toml`, `.env` and `docs/`.
+Until then the copy runs the bundled demo app (`docs/setup.md` in the copy).
 
-## Layout
+## Update a stamped harness
 
-| Path | What |
-|---|---|
-| `harness/cli.py` | the commands: `status`, `dump-workbook`, `validate`, `sql`, `run-case`, `revert`, `results`, `verdict`, `report` |
-| `harness/db.py` | connection adapter (sqlite, Oracle, MSSQL), allowlisted updates, ledger, revert, read-only query |
-| `harness/run.py` | the case lifecycle and the manifest; revert lives in a `finally` |
-| `harness/optimizer.py` | submit and poll |
-| `harness/results.py` | parquet summaries and duckdb SQL |
-| `harness/report.py` | workbook dump and the Excel report |
-| `harness/stub.py` | fake optimizer API and sample database for local runs and tests |
-| `harness.toml` | dialect, QA guard, `[[allow]]` list, API field names, paths |
-| `specs/` | compiled test cases, one YAML per case |
-| `.claude/skills/` | `optimizer-test-compile` and `optimizer-test-run` |
-| `docs/` | glossary, schema, API and parquet notes to fill in at work; setup |
-| `examples/ba-test-cases.xlsx` | a sample BA workbook to practice on |
+```bash
+uvx copier update      # in the stamped repo, with a clean working tree
+```
 
-## Safety properties, enforced in the CLI
+Template-owned files (`harness/`, `tests/`, `demo/`, `.claude/skills/`, `docs/setup.md`, README, CLAUDE.md) are
+updated. App-owned files (`harness.toml`, `.env`, `specs/`, `docs/glossary.md`, `docs/schema.md`, `docs/api.md`,
+`docs/outputs.md`) are left alone. Stamped repos should only ever change app-owned files; a fix to anything else
+belongs here, so every app gets it.
 
-- Refuses any DSN that does not look like QA (`qa_markers`).
-- Changes touch only allowlisted tables and columns, one row each, identified by the full key. Zero or several rows is a rollback.
-- Each case's changes commit together; the revert is one transaction too, and always runs.
-- A failed revert leaves `runs/PENDING_REVERT`. Every command then prints a banner and `run-case` refuses to start.
-- Mutating commands show their plan and do nothing without `--yes`.
+## Work on the template
 
-## Status
+The project lives in `template/`, a normal uv project; its tests use the demo app and `demo/` only, so they pass
+unchanged in every stamped copy.
 
-Built ahead of access to the real systems. Fill in `docs/` and `harness.toml` with the real schema, API and allowlist,
-then run against QA. Open items are listed at the end of `docs/setup.md`.
+```bash
+cd template && uv sync && uv run pytest && uv run pre-commit run --all-files   # while developing
+./check.sh                                                                     # stamps a copy and runs its checks
+```
+
+Tag a release (`git tag v0.2.0`) after merging; `copier update` moves stamped repos to the latest tag.

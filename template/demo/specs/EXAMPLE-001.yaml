@@ -1,0 +1,29 @@
+# DB update. Run: uv run --env-file .env harness --config demo/harness.toml run-case demo/specs/EXAMPLE-001.yaml
+case_id: EXAMPLE-001
+title: A bigger chair discount lowers the chair price
+source: {sheet: Pricing, row: 2}
+description: |
+  Raise the discount on the office chair to 30% and reprice it.
+  The chair should come out at 175.00.
+interpretation: |
+  Set DISCOUNT_RULE R-2 (the chair's only rule) PERCENT from 15 to 30, run a pricing job for P-200, and check that
+  get_prices shows final_price 175.00 (250.00 less 30%).
+subject:
+  criteria: the office chair, which has exactly one enabled discount rule
+  ids: [P-200]
+  rationale: R-2 is the only rule on P-200, so its percent is the whole discount
+setup:
+  - {db: update, table: DISCOUNT_RULE, key: {RULE_ID: R-2}, set: {PERCENT: 30}}
+run:
+  - {api: submit_job, body: {product_ids: [P-200]}}
+  - {api: wait_job}
+  - {api: get_prices}
+collect:
+  - {name: rule_during_run, sql: "SELECT RULE_ID, PERCENT, ENABLED FROM DISCOUNT_RULE WHERE RULE_ID = 'R-2'"}
+  - {name: job_results, sql: "SELECT PRODUCT_ID, FINAL_PRICE FROM JOB_RESULT WHERE JOB_ID = {job_id}"}
+expected:
+  outcome: success
+  text: The chair should come out at 175.00.
+  evaluation_plan:
+    - "get_prices: SELECT p.product_id, p.final_price FROM (SELECT unnest(prices) AS p FROM get_prices); P-200 final_price = 175.0"
+    - "rule_during_run: PERCENT = 30, showing the change was in effect during the run"
